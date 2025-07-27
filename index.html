@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Assistant - Saru</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(to right, #ecf0f1, #bdc3c7);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      height: 100vh;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      width: 90%;
+      max-width: 500px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+
+    .response-box {
+      min-height: 100px;
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      background: #f9f9f9;
+      font-size: 16px;
+      text-align: left;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      background-color: #3498db;
+      color: white;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+  </style>
+</head>  
+<body>
+  <div class="container">
+    <h1>👋 Hey Saru</h1>
+    <div id="response" class="response-box">Ask me anything...</div>
+    <button onclick="startListening()">🎤 Speak</button>
+  </div>
+
+  <script>
+    const ELEVENLABS_API_KEY = "ap2_619e493a-03cf-431e-be34-7cf5959a5de1";
+    const GEMINI_API_KEY = "AIzaSyA7NhTRM9NbikcftHGR26dqO3yxvvY2qKA";
+    const GOOGLE_API_KEY = "nuendwsGAy9YuciXX9e8EHiZ";
+    const GOOGLE_CX = "77f8f35e810c44a23";
+
+    async function startListening() {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = "en-IN";
+      recognition.start();
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById("response").innerText = "You said: " + transcript;
+        await handleQuery(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        document.getElementById("response").innerText = "Mic Error: " + event.error;
+      };
+    }
+
+    async function handleQuery(userInput) {
+      let reply = "Hmm...";
+
+      if (userInput.toLowerCase().includes("wikipedia")) {
+        reply = await searchWikipedia(userInput.replace("wikipedia", "").trim());
+      } else if (userInput.toLowerCase().includes("search")) {
+        reply = await googleSearch(userInput.replace("search", "").trim());
+      } else {
+        reply = await getGeminiResponse(userInput);
+      }
+
+      const htmlReply = `<div style="background:#f2f2f2;padding:12px;border-radius:10px;margin-top:10px;"><strong>🤖 Saru:</strong> ${reply}</div>`;
+      document.getElementById("response").innerHTML = htmlReply;
+      speakWithElevenLabs(reply);
+    }
+
+    async function getGeminiResponse(input) {
+      try {
+        const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" + GEMINI_API_KEY, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: input }] }] })
+        });
+        const data = await res.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text || "Saru ko iska jawab nahi mila.";
+      } catch (e) {
+        return "Gemini se connection nahi ho paya.";
+      }
+    }
+
+    async function searchWikipedia(query) {
+      try {
+        const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`);
+        if (res.ok) {
+          const data = await res.json();
+          return data.extract || "Wikipedia par kuch nahi mila.";
+        }
+        return "Wikipedia se data nahi mila.";
+      } catch {
+        return "Wikipedia access mein samasya aayi.";
+      }
+    }
+
+    async function googleSearch(query) {
+      try {
+        const res = await fetch(`https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_CX}&q=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (data.items && data.items.length > 0) {
+          return `${data.items[0].title}<br>${data.items[0].snippet}<br><a href='${data.items[0].link}' target='_blank'>Link</a>`;
+        }
+        return "Google par kuch nahi mila.";
+      } catch {
+        return "Google Search kaam nahi kar raha hai.";
+      }
+    }
+
+    async function speakWithElevenLabs(text) {
+      try {
+        const voiceId = "k2intd1ORm0YUH8etnXg";
+        const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+          method: "POST",
+          headers: {
+            "xi-api-key": ELEVENLABS_API_KEY,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            text,
+            model_id: "eleven_monolingual_v1",
+            voice_settings: { stability: 0.5, similarity_boost: 0.7 }
+          })
+        });
+
+        const audioBlob = await res.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        const audio = new Audio(audioUrl);
+        audio.play();
+      } catch (e) {
+        console.error("Audio error:", e);
+      }
+    }
+  </script>
+</body>
+</html>
